@@ -1,0 +1,1 @@
+## All Gates verilog code 
