@@ -1,131 +1,136 @@
 
- 
-module UART_TX 
-  #(parameter CLKS_PER_BIT = 217)
-  (
-   input       i_Rst_L,
-   input       i_Clock,
-   input       i_TX_DV,
-   input [7:0] i_TX_Byte, 
-   output reg  o_TX_Active,
-   output reg  o_TX_Serial,
-   output reg  o_TX_Done
-   );
- 
-  localparam IDLE         = 2'b00;
-  localparam TX_START_BIT = 2'b01;
-  localparam TX_DATA_BITS = 2'b10;
-  localparam TX_STOP_BIT  = 2'b11;
-  
-  reg [2:0] r_SM_Main;
-  reg [$clog2(CLKS_PER_BIT):0] r_Clock_Count;
-  reg [2:0] r_Bit_Index;
-  reg [7:0] r_TX_Data;
+
+module uart_tx(
+    input clk_3125,
+    input parity_type,tx_start,
+    input [7:0] data,
+    output reg tx, tx_done
+);
 
 
- 
-  always @(posedge i_Clock or negedge i_Rst_L)
-  begin
-    if (~i_Rst_L)
-    begin
-      r_SM_Main <= 3'b000;
+
+parameter CLKS_PER_BIT = 14;
+parameter IDLE        = 3'd0;
+parameter START_BIT   = 3'd1;
+parameter DATA_BITS   = 3'd2;
+parameter PARITY_BIT  = 3'd3;
+parameter STOP_BIT    = 3'd4;
+
+reg [2:0] current_state = IDLE;
+reg [4:0] clk_count = 0;
+reg [2:0] bit_index = 0;
+reg parity_bit = 0;
+reg [7:0] tx_data = 8'd0;
+
+initial begin
+    tx = 1;
+    tx_done = 0;
+end
+
+always @(posedge clk_3125) begin
+    case (current_state)
+
+    IDLE: begin
+        if (clk_count == 0) begin
+            tx <= 1;
+            tx_done <= 0;
+            bit_index <= 7;  
+        end
+
+        clk_count <= 0;
+
+        if (tx_start) begin
+            tx_data <= data;
+            parity_bit <= (^data) ^ parity_type;
+            tx <= 0;  
+            current_state <= START_BIT;
+        end
     end
-    else
-    begin
 
-      o_TX_Done <= 1'b0;
+    START_BIT: begin
+        if (clk_count == 0) begin
+            tx <= 0;  
+        end
+        else if (clk_count == CLKS_PER_BIT - 2) begin
+            tx <= tx_data[7];  
+        end
 
-      case (r_SM_Main)
-      IDLE :
-        begin
-          o_TX_Serial   <= 1'b1;         `          r_Clock_Count <= 0;
-          r_Bit_Index   <= 0;
-          
-          if (i_TX_DV == 1'b1)
-          begin
-            o_TX_Active <= 1'b1;
-            r_TX_Data   <= i_TX_Byte;
-            r_SM_Main   <= TX_START_BIT;
-          end
-          else
-            r_SM_Main <= IDLE;
-        end // case: IDLE
-      
-      
-      
-      TX_START_BIT :
-        begin
-          o_TX_Serial <= 1'b0;
-          
-         
-          if (r_Clock_Count < CLKS_PER_BIT-1)
-          begin
-            r_Clock_Count <= r_Clock_Count + 1;
-            r_SM_Main     <= TX_START_BIT;
-          end
-          else
-          begin
-            r_Clock_Count <= 0;
-            r_SM_Main     <= TX_DATA_BITS;
-          end
-        end 
-      
-      
-              
-      TX_DATA_BITS :
-        begin
-          o_TX_Serial <= r_TX_Data[r_Bit_Index];
-          
-          if (r_Clock_Count < CLKS_PER_BIT-1)
-          begin
-            r_Clock_Count <= r_Clock_Count + 1;
-            r_SM_Main     <= TX_DATA_BITS;
-          end
-          else
-          begin
-            r_Clock_Count <= 0;
-            
-            
-            if (r_Bit_Index < 7)
-            begin
-              r_Bit_Index <= r_Bit_Index + 1;
-              r_SM_Main   <= TX_DATA_BITS;
-            end
+        if (clk_count == CLKS_PER_BIT) begin
+            clk_count <= 0;
+            current_state <= DATA_BITS;
+        end else begin
+            clk_count <= clk_count + 1;
+        end
+    end
+
+    DATA_BITS: begin
+        if (clk_count == 0) begin
+            tx <= tx_data[bit_index];  
+        end
+        else if (clk_count == CLKS_PER_BIT - 2) begin
+            if (bit_index > 0)
+                tx <= tx_data[bit_index - 1];  
             else
-            begin
-              r_Bit_Index <= 0;
-              r_SM_Main   <= TX_STOP_BIT;
-            end
-          end 
-        end 
-      
-      
-     
-      TX_STOP_BIT :
-        begin
-          o_TX_Serial <= 1'b1;
-          
-          
-          if (r_Clock_Count < CLKS_PER_BIT-1)
-          begin
-            r_Clock_Count <= r_Clock_Count + 1;
-            r_SM_Main     <= TX_STOP_BIT;
-          end
-          else
-          begin
-            o_TX_Done     <= 1'b1;
-            r_Clock_Count <= 0;
-            r_SM_Main     <= IDLE;
-            o_TX_Active   <= 1'b0;
-          end 
-        end      
-      
-      default :
-        r_SM_Main <= IDLE;
-      
-    endcase
-    end 
-  end 
+                tx <= parity_bit; 
+        end
 
-  
+        if (clk_count == CLKS_PER_BIT - 1) begin
+            clk_count <= 0;
+            if (bit_index > 0)
+                bit_index <= bit_index - 1;
+            else begin
+                bit_index <= 0;
+                current_state <= PARITY_BIT;
+            end
+        end else begin
+            clk_count <= clk_count + 1;
+        end
+    end
+
+    PARITY_BIT: begin
+        if (clk_count == 0) begin
+            tx <= parity_bit;
+        end
+        else if (clk_count == CLKS_PER_BIT - 2) begin
+            tx <= 1; 
+        end
+
+        if (clk_count == CLKS_PER_BIT - 1) begin
+            clk_count <= 0;
+            current_state <= STOP_BIT;
+        end else begin
+            clk_count <= clk_count + 1;
+        end
+    end
+
+    STOP_BIT: begin
+        if (clk_count == 0) begin
+            tx <= 1;
+        end
+
+        if (clk_count == CLKS_PER_BIT - 3) begin
+            tx_done <= 1;  
+        end
+
+        if (clk_count == CLKS_PER_BIT - 2) begin
+            clk_count <= 0;
+            tx_done <= 0;
+            tx <= 1;
+            current_state <= IDLE;
+        end else begin
+            clk_count <= clk_count + 1;
+        end
+    end
+
+    endcase
+end
+
+
+
+
+
+
+
+
 endmodule
+
