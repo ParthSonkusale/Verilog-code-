@@ -53,14 +53,14 @@ begin
 end
 endtask
 
-// 🔽 This block actually runs the tasks
+
 initial begin
-    // send 5 characters
+    
     fork
-        send_data();       // transmit data
-        receive_data();    // receive data
+        send_data();       
+        receive_data();    
     join
-    $stop; // stop simulation
+    $stop; 
 end
 	 
 endmodule
