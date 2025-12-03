@@ -85,41 +85,47 @@ int main(int argc, char const *argv[]) {
     uint32_t *graph = (uint32_t *)0x02000010;  // base address for memory-mapped graph
 #endif
 
-    // Step 1: Build adjacency (based on your map connections)
-    
-    // You need to fill all edges from your map.
-graph[0]  = (1<<1) | (1<<6) | (1<<10);
-graph[1]  = (1<<0) | (1<<11)|(1<<2);
-graph[2]  = (1<<3) | (1<<5) | (1<<1) | (1<<4);
-graph[3]  = (1<<2);
-graph[4]  = (1<<2);
-graph[5]  = (1<<2);
-graph[6]  = (1<<0) | (1<<7) | (1<<9) | (1<<8);
-graph[7]  = (1<<6);
-graph[8]  = (1<<6);
-graph[9]  = (1<<6);
-graph[10] = (1<<0)|(1<<11)|(1<<24)|(1<<26);
-graph[11] = (1<<1) | (1<<12)|(1<<10)|(1<<19);
-graph[12] = (1<<11) | (1<<13) | (1<<14);
-graph[13] = (1<<12);
-graph[14] = (1<<12) | (1<<15) | (1<<16); 
-graph[15] = (1<<14);
-graph[16] = (1<<14) | (1<<17) | (1<<18);
-graph[17]=(1<<16);
-graph[18] =(1<<16) | (1<<21) | (1<<19);
-graph[19] = (1<<11) | (1<<18) | (1<<20);
-graph[20] = (1<<19);
-graph[21] = (1<<18) | (1<<22) | (1<<23);
-graph[22] = (1<<21);
-graph[23] = (1<<21) | (1<<24) | (1<<30);
-graph[24] = (1<<23) | (1<<25) | (1<<10);
-graph[25] = (1<<24);
-graph[26] = (1<<10) | (1<<27) | (1<<28);
-graph[27] = (1<<26);
-graph[28] = (1<<26) | (1<<29) | (1<<30);
-graph[29] = (1<<28);
-graph[30] =(1<<23) | (1<<28)| (1<<31);
-graph[31] = (1<<30);
+// Step 1: Build adjacency (auto-generated from 9x9 maze)
+#define N 9
+#define V (N*N)
+
+int maze[N][N] = {
+    {0, 1, 0, 0, 1, 0, 1, 0, 0},
+    {0, 1, 1, 0, 1, 0, 1, 1, 0},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0},
+    {1, 1, 0, 1, 1, 0, 1, 0, 1},
+    {0, 0, 0, 1, 0, 0, 0, 0, 0},
+    {1, 0, 1, 1, 1, 1, 1, 1, 0},
+    {0, 0, 0, 0, 0, 0, 1, 0, 0},
+    {1, 1, 1, 1, 1, 0, 1, 1, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+
+// Clear the graph first
+for (int i = 0; i < V; i++) graph[i] = 0;
+
+// Directions: up, down, left, right
+int dr[4] = {-1, 1, 0, 0};
+int dc[4] = {0, 0, -1, 1};
+
+// Build adjacency dynamically
+for (int r = 0; r < N; r++) {
+    for (int c = 0; c < N; c++) {
+        if (maze[r][c] == 1) continue; // wall → skip
+
+        int u = r * N + c;
+        for (int d = 0; d < 4; d++) {
+            int nr = r + dr[d];
+            int nc = c + dc[d];
+            if (nr >= 0 && nr < N && nc >= 0 && nc < N && maze[nr][nc] == 0) {
+                int v = nr * N + nc;
+                if (v < 32)      graph[u] |= (1U << v);   // low nodes
+                else if (v < 64) graph[u] |= (1U << (v - 32)); // extend if needed
+                // if your hardware supports >32 bits per entry, adjust accordingly
+            }
+        }
+    }
+}
 
  
 
